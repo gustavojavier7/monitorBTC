@@ -95,22 +95,33 @@
         }
 
         .price-card {
-            background: rgba(255, 255, 255, 0.05);
+            background: linear-gradient(120deg, rgba(9, 17, 44, 0.85), rgba(8, 23, 56, 0.65));
             margin-bottom: 5px;
             padding: 15px;
             border-radius: 15px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            transition: all 0.3s ease;
+            border: 1px solid rgba(125, 211, 252, 0.22);
+            transition: transform 0.55s cubic-bezier(.2, .9, .2, 1), box-shadow 0.25s ease, border-color 0.25s ease, background 0.25s ease;
             position: relative;
+            will-change: transform;
         }
 
         .price-card:hover {
-            background: rgba(255, 255, 255, 0.1);
+            background: linear-gradient(120deg, rgba(14, 30, 70, 0.95), rgba(10, 33, 80, 0.85));
             transform: translateY(-2px);
         }
 
         .price-card:last-child {
             margin-bottom: 0;
+        }
+
+        .price-card.moving-up {
+            border-color: rgba(16, 185, 129, 0.65);
+            box-shadow: 0 0 24px rgba(16, 185, 129, 0.3);
+        }
+
+        .price-card.moving-down {
+            border-color: rgba(245, 158, 11, 0.65);
+            box-shadow: 0 0 24px rgba(245, 158, 11, 0.28);
         }
 
         .card-header {
@@ -339,19 +350,65 @@
             }
         }
 
-        // Ordenar cards por precio
+        function captureCardPositions(cards) {
+            const positions = new Map();
+            cards.forEach(card => positions.set(card, card.getBoundingClientRect()));
+            return positions;
+        }
+
+        function animateCardReorder(container, nextOrder, firstPositions) {
+            nextOrder.forEach(card => container.appendChild(card));
+
+            const lastPositions = captureCardPositions(nextOrder);
+
+            nextOrder.forEach(card => {
+                const first = firstPositions.get(card);
+                const last = lastPositions.get(card);
+                const deltaY = first.top - last.top;
+
+                card.classList.remove('moving-up', 'moving-down');
+
+                if (deltaY === 0) return;
+
+                if (deltaY > 0) {
+                    card.classList.add('moving-up');
+                } else {
+                    card.classList.add('moving-down');
+                }
+
+                card.style.transition = 'none';
+                card.style.transform = `translateY(${deltaY}px)`;
+
+                requestAnimationFrame(() => {
+                    card.style.transition = '';
+                    card.style.transform = 'translateY(0)';
+                });
+            });
+
+            setTimeout(() => {
+                nextOrder.forEach(card => card.classList.remove('moving-up', 'moving-down'));
+            }, 650);
+        }
+
+        // Ordenar cards por precio y animar sólo si cambia la posición
         function reorderCards(containerType) {
             const container = document.getElementById(`${containerType}Container`);
             const cards = Array.from(container.children);
-            
-            const sortedCards = cards.sort((a, b) => {
+            const firstPositions = captureCardPositions(cards);
+
+            const sortedCards = [...cards].sort((a, b) => {
                 const priceA = parseFloat(elements[a.id].price.textContent.replace(/[$,]/g, '')) || 0;
                 const priceB = parseFloat(elements[b.id].price.textContent.replace(/[$,]/g, '')) || 0;
                 return priceB - priceA;
             });
-            
-            container.innerHTML = '';
-            sortedCards.forEach(card => container.appendChild(card));
+
+            const orderChanged = cards.some((card, index) => card !== sortedCards[index]);
+
+            if (!orderChanged) {
+                return;
+            }
+
+            animateCardReorder(container, sortedCards, firstPositions);
         }
 
         // Fetch API data (todas las APIs de Binance + CoinGecko)
