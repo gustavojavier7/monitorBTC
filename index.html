@@ -390,15 +390,20 @@
         function aplicarColorPrecio(key, nextPrice) {
             const element = elements[key].price;
             const previousRendered = Number(element.dataset.renderedPrice);
-
-            element.classList.remove('neutral', 'up', 'down');
+            const numeric = Number(nextPrice);
 
             if (!Number.isFinite(previousRendered)) {
+                element.classList.remove('neutral', 'up', 'down');
                 element.classList.add('neutral');
                 return;
             }
 
-            if (Number(nextPrice) >= previousRendered) {
+            // Sin cambio de precio: conservar el color de la 煤ltima variaci贸n real
+            if (numeric === previousRendered) return;
+
+            element.classList.remove('neutral', 'up', 'down');
+
+            if (numeric > previousRendered) {
                 element.classList.add('up');
             } else {
                 element.classList.add('down');
