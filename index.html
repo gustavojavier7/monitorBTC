@@ -140,6 +140,10 @@
             animation: blink 0.85s steps(1) infinite;
         }
 
+        .cursor-target.erasing .price::after {
+            animation-duration: 0.2s;
+        }
+
         .card-header {
             display: flex;
             justify-content: space-between;
@@ -197,10 +201,6 @@
             text-shadow: 0 0 10px rgba(239, 68, 68, 0.45);
         }
 
-        .blinking-price {
-            animation: finalPriceFlash 0.2s steps(1, end) 5;
-        }
-
         .loading {
             opacity: 0.5;
             animation: pulse 2s infinite;
@@ -215,18 +215,6 @@
             0% { opacity: 0.5; }
             50% { opacity: 0.8; }
             100% { opacity: 0.5; }
-        }
-
-        @keyframes finalPriceFlash {
-            0%, 49% {
-                text-shadow:
-                    0 0 8px currentColor,
-                    0 0 18px currentColor;
-            }
-
-            50%, 100% {
-                text-shadow: none;
-            }
         }
 
         @media (max-width: 768px) {
@@ -249,15 +237,15 @@
     <div class="header">
         <h1>Monitor de Precios BTC <span class="version">v1.0</span></h1>
         <div class="countdown">
-            <div class="countdown-text">Próxima actualización API en:</div>
+            <div class="countdown-text">Pr贸xima actualizaci贸n API en:</div>
             <div class="countdown-time" id="countdownDisplay">60s</div>
         </div>
     </div>
 
     <div class="main-container">
-        <!-- Sección APIs (Izquierda) -->
+        <!-- Secci贸n APIs (Izquierda) -->
         <div class="section api-section">
-            <h2 class="section-title">📊 APIs (Actualización cada minuto)</h2>
+            <h2 class="section-title">馃搳 APIs (Actualizaci贸n cada minuto)</h2>
             <div id="apiContainer">
                 <div class="price-card" id="coingecko">
                     <div class="card-header">
@@ -282,7 +270,7 @@
                 
                 <div class="price-card" id="binanceIndexAPI">
                     <div class="card-header">
-                        <span class="exchange-name">Binance Índice API</span>
+                        <span class="exchange-name">Binance 脥ndice API</span>
                     </div>
                     <div class="price loading" id="binanceIndexAPIPrice">Cargando...</div>
                 </div>
@@ -296,9 +284,9 @@
             </div>
         </div>
 
-        <!-- Sección WebSockets (Derecha) -->
+        <!-- Secci贸n WebSockets (Derecha) -->
         <div class="section websocket-section">
-            <h2 class="section-title">⚡ WebSockets (Tiempo Real)</h2>
+            <h2 class="section-title">鈿?WebSockets (Tiempo Real)</h2>
             <div id="websocketContainer">
                 <div class="price-card" id="binanceRealtime">
                     <div class="card-header">
@@ -346,7 +334,7 @@
         const debounceReorders = { api: null, websocket: null };
         const DEBOUNCE_DELAY = 160;
 
-        // Configuración de elementos
+        // Configuraci贸n de elementos
         const config = {
             apis: ['coingecko', 'binanceAPI', 'binanceFuturesAPI', 'binanceIndexAPI', 'binanceSettlementAPI'],
             websockets: ['binanceRealtime', 'coinbase', 'kraken', 'bitfinex']
@@ -440,8 +428,14 @@
             const element = elements[key].price;
             const token = ++typingTokens[key];
             const text = formatPrice(price);
+            const card = document.getElementById(key);
 
             aplicarColorPrecio(key, price);
+
+            // Cursor en esta tarjeta antes de escribir
+            getCardsByType(containerType).forEach(c => c.classList.remove('cursor-target', 'erasing'));
+            card.classList.add('cursor-target');
+
             element.textContent = '';
 
             for (const char of text) {
@@ -461,13 +455,17 @@
             const key = card.id;
             const element = elements[key].price;
 
-            element.classList.add('blinking-price');
+            // Mover cursor a esta tarjeta con parpadeo r谩pido (0.2s 脳 5 = 1s)
+            getCardsByType(containerType).forEach(c => c.classList.remove('cursor-target', 'erasing'));
+            card.classList.add('cursor-target', 'erasing');
+
             await sleep(1000);
-            element.classList.remove('blinking-price');
+
+            card.classList.remove('erasing', 'cursor-target');
             element.textContent = '';
         }
 
-        // Actualizar estado de conexión
+        // Actualizar estado de conexi贸n
         function updateConnectionStatus(key, isConnected) {
             const statusElement = elements[key].status;
             if (statusElement) {
@@ -487,28 +485,6 @@
 
         function getMovedCards(currentOrder, nextOrder) {
             return currentOrder.filter((card, index) => card !== nextOrder[index]);
-        }
-
-        async function parpadearMenorEntreTarjetasMovidas(containerType, movedCards, duration = 1000) {
-            const movedCardsWithPrice = movedCards.filter(card => {
-                return !Number.isNaN(getNumericPriceFromCard(card));
-            });
-
-            if (!movedCardsWithPrice.length) return;
-
-            const lowestMovedCard = movedCardsWithPrice.reduce((lowest, card) => {
-                return getNumericPriceFromCard(card) < getNumericPriceFromCard(lowest)
-                    ? card
-                    : lowest;
-            });
-
-            const priceElement = elements[lowestMovedCard.id].price;
-
-            priceElement.classList.add('blinking-price');
-
-            await sleep(duration);
-
-            priceElement.classList.remove('blinking-price');
         }
 
         function updateCursorSoloEnMovidas(containerType, movedCards) {
@@ -624,7 +600,7 @@
             }
         }
 
-        // Ordenar cards por precio y animar sólo si cambia la posición
+        // Ordenar cards por precio y animar s贸lo si cambia la posici贸n
         async function reorderCards(containerType) {
             if (reorderLocks[containerType]) return;
 
@@ -763,7 +739,7 @@
                 ws.onclose = () => {
                     console.log(`${key} WebSocket disconnected`);
                     updateConnectionStatus(key, false);
-                    // Reconectar después de 5 segundos
+                    // Reconectar despu茅s de 5 segundos
                     setTimeout(() => setupWebSocket(key, url, subscriptionMessage, processData), 5000);
                 };
                 
@@ -830,7 +806,7 @@
             })());
         }
 
-        // Inicialización
+        // Inicializaci贸n
         function initialize() {
             initializeElements();
             fetchAPIData();
@@ -842,7 +818,7 @@
             setInterval(updateCountdown, 1000);
         }
 
-        // Iniciar aplicación
+        // Iniciar aplicaci贸n
         initialize();
     </script>
 </body>
