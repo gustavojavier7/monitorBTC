@@ -181,6 +181,19 @@
             transition: text-shadow 0.2s ease;
         }
 
+
+        .price {
+            min-height: 1.2em;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .price.is-erased {
+            color: transparent !important;
+            text-shadow: none !important;
+        }
+
         .price.up {
             color: #10b981;
             text-shadow: 0 0 10px rgba(16, 185, 129, 0.45);
@@ -336,6 +349,7 @@
         const typingTokens = {};
         const CHARS_PER_SECOND = 25;
         const TYPE_DELAY = 1000 / CHARS_PER_SECOND;
+        const CURSOR_BLINK_DURATION_SECONDS = 0.85;
         const reorderLocks = { api: false, websocket: false };
 
         const cursors = {
@@ -353,6 +367,8 @@
         function createCursor() {
             const cursor = document.createElement('span');
             cursor.className = 'cursor off';
+            const nowSeconds = Date.now() / 1000;
+            cursor.style.animationDelay = `-${(nowSeconds % CURSOR_BLINK_DURATION_SECONDS).toFixed(3)}s`;
             return cursor;
         }
 
@@ -425,7 +441,7 @@
             typingTokens[key]++;
             element.textContent = formatPrice(numericPrice);
             element.dataset.renderedPrice = String(numericPrice);
-            element.classList.remove('loading');
+            element.classList.remove('loading', 'is-erased');
         }
 
         async function escribirPrecioConCursor(containerType, key, price) {
@@ -435,6 +451,8 @@
             const text = formatPrice(price);
 
             aplicarColorPrecio(key, price);
+
+            element.classList.remove('is-erased');
 
             cursor.classList.remove('off');
             element.textContent = '';
@@ -453,7 +471,7 @@
             if (typingTokens[key] !== token) return;
 
             element.dataset.renderedPrice = String(price);
-            element.classList.remove('loading');
+            element.classList.remove('loading', 'is-erased');
             cursor.classList.remove('off');
         }
 
@@ -472,7 +490,7 @@
             element.classList.remove('blinking-price');
 
             cursor.remove();
-            element.textContent = '';
+            element.classList.add('is-erased');
             element.appendChild(cursor);
         }
 
@@ -695,7 +713,7 @@
                     typingTokens[key]++;
                     element.textContent = formatPrice(price);
                     element.dataset.renderedPrice = String(price);
-                    element.classList.remove('loading');
+                    element.classList.remove('loading', 'is-erased');
                 }
 
                 updateCursorEnTarjetaInferior(containerType);
