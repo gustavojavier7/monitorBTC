@@ -107,11 +107,6 @@
 
         .price-card:hover {
             background: linear-gradient(120deg, rgba(14, 30, 70, 0.95), rgba(10, 33, 80, 0.85));
-            transform: translateY(-2px);
-        }
-
-        .is-reordering .price-card:hover {
-            transform: none;
         }
 
         .price-card:last-child {
@@ -196,7 +191,7 @@
         }
 
         .blinking-price {
-            animation: blink-price 0.55s ease-in-out infinite;
+            animation: blink-price 0.2s steps(1, end) infinite;
         }
 
         .loading {
@@ -216,8 +211,15 @@
         }
 
         @keyframes blink-price {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.35; }
+            0%, 49% {
+                color: inherit;
+                text-shadow: inherit;
+            }
+
+            50%, 100% {
+                color: rgba(10, 30, 20, 0.95);
+                text-shadow: none;
+            }
         }
 
         @media (max-width: 768px) {
@@ -814,7 +816,6 @@
             
             // Configurar intervalos
             setInterval(updateCountdown, 1000);
-            setInterval(fetchAPIData, 60000); // Cada minuto
         }
 
         // Iniciar aplicación
