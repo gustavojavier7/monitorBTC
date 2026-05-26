@@ -123,7 +123,7 @@
             box-shadow: 0 0 24px rgba(245, 158, 11, 0.28);
         }
 
-        .price-card.lowest {
+        .price-card.cursor-target {
             border-color: rgba(250, 204, 21, 0.7);
             box-shadow: 0 0 26px rgba(250, 204, 21, 0.22);
         }
@@ -177,21 +177,17 @@
             font-size: 1.8em;
             font-weight: 700;
             text-align: center;
-            color: #10b981;
-            transition: text-shadow 0.2s ease;
-        }
-
-
-        .price {
+            color: #facc15;
             min-height: 1.2em;
             display: flex;
             justify-content: center;
             align-items: center;
+            transition: text-shadow 0.2s ease;
         }
 
-        .price.is-erased {
-            color: transparent !important;
-            text-shadow: none !important;
+        .price.neutral {
+            color: #facc15;
+            text-shadow: 0 0 10px rgba(250, 204, 21, 0.45);
         }
 
         .price.up {
@@ -246,7 +242,7 @@
                 font-size: 2em;
             }
             
-            .price {
+            .price-card .price {
                 font-size: 1.5em;
             }
         }
@@ -411,10 +407,10 @@
             const element = elements[key].price;
             const previousRendered = Number(element.dataset.renderedPrice);
 
-            element.classList.remove('up', 'down');
+            element.classList.remove('neutral', 'up', 'down');
 
             if (!Number.isFinite(previousRendered)) {
-                element.classList.add('up');
+                element.classList.add('neutral');
                 return;
             }
 
@@ -441,7 +437,7 @@
             typingTokens[key]++;
             element.textContent = formatPrice(numericPrice);
             element.dataset.renderedPrice = String(numericPrice);
-            element.classList.remove('loading', 'is-erased');
+            element.classList.remove('loading');
         }
 
         async function escribirPrecioConCursor(containerType, key, price) {
@@ -452,8 +448,7 @@
 
             aplicarColorPrecio(key, price);
 
-            element.classList.remove('is-erased');
-
+            
             cursor.classList.remove('off');
             element.textContent = '';
             element.appendChild(cursor);
@@ -471,7 +466,7 @@
             if (typingTokens[key] !== token) return;
 
             element.dataset.renderedPrice = String(price);
-            element.classList.remove('loading', 'is-erased');
+            element.classList.remove('loading');
             cursor.classList.remove('off');
         }
 
@@ -490,8 +485,9 @@
             element.classList.remove('blinking-price');
 
             cursor.remove();
-            element.classList.add('is-erased');
+            element.textContent = '';
             element.appendChild(cursor);
+            cursor.classList.remove('off');
         }
 
         // Actualizar estado de conexión
@@ -545,7 +541,7 @@
             const cursor = cursors[containerType];
 
             getCardsByType(containerType).forEach(card => {
-                card.classList.remove('lowest');
+                card.classList.remove('cursor-target');
             });
 
             const movedCardsWithPrice = movedCards.filter(card => {
@@ -563,7 +559,7 @@
                     : lowest;
             });
 
-            lowestMovedCard.classList.add('lowest');
+            lowestMovedCard.classList.add('cursor-target');
 
             const priceElement = elements[lowestMovedCard.id].price;
             priceElement.appendChild(cursor);
@@ -575,7 +571,7 @@
             const cards = getCardsByType(containerType);
 
             cards.forEach(card => {
-                card.classList.remove('lowest');
+                card.classList.remove('cursor-target');
             });
 
             const cardsWithPrice = cards.filter(card => {
@@ -590,7 +586,7 @@
             const bottomCard = cardsWithPrice[cardsWithPrice.length - 1];
             const priceElement = elements[bottomCard.id].price;
 
-            bottomCard.classList.add('lowest');
+            bottomCard.classList.add('cursor-target');
             priceElement.appendChild(cursor);
             cursor.classList.remove('off');
         }
@@ -713,7 +709,7 @@
                     typingTokens[key]++;
                     element.textContent = formatPrice(price);
                     element.dataset.renderedPrice = String(price);
-                    element.classList.remove('loading', 'is-erased');
+                    element.classList.remove('loading');
                 }
 
                 updateCursorEnTarjetaInferior(containerType);
