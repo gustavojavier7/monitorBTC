@@ -320,6 +320,7 @@
         const typingTokens = {};
         const CHARS_PER_SECOND = 25;
         const TYPE_DELAY = 1000 / CHARS_PER_SECOND;
+        const reorderLocks = { api: false, websocket: false };
 
         const cursors = {
             api: createCursor(),
@@ -367,25 +368,24 @@
                 fetchAPIData();
             }
         }
+        async function escribirPrecioConCursor(containerType, key, text) {
+            const element = elements[key].price;
+            const token = ++typingTokens[key];
+            const cursor = cursors[containerType];
 
-        async function escribirPrecioGradual(element, text, token, key) {
+            cursor.classList.add('off');
             element.textContent = '';
+
             for (const char of text) {
                 if (typingTokens[key] !== token) return;
                 element.textContent += char;
                 await sleep(TYPE_DELAY);
             }
-        }
 
-        async function escribirPrecioConCursor(key, text) {
-            const element = elements[key].price;
-            const token = ++typingTokens[key];
-            const cursor = createCursor();
-            cursor.classList.remove('off');
-            element.appendChild(cursor);
-            await escribirPrecioGradual(element, text, token, key);
             if (typingTokens[key] !== token) return;
+
             element.appendChild(cursor);
+            cursor.classList.remove('off');
         }
 
         function escribirPrecioInstantaneo(key, text) {
@@ -428,26 +428,62 @@
             return parseFloat(elements[card.id].price.textContent.replace(/[$,]/g, ''));
         }
 
-        function updateLowestCursor(containerType) {
-            const cards = getCardsByType(containerType);
+        function getMovedCards(currentOrder, nextOrder) {
+            return currentOrder.filter((card, index) => card !== nextOrder[index]);
+        }
+
+        async function parpadearMenorEntreTarjetasMovidas(containerType, movedCards, duration = 1000) {
             const cursor = cursors[containerType];
 
-            cards.forEach(card => card.classList.remove('lowest'));
+            const movedCardsWithPrice = movedCards.filter(card => {
+                return !Number.isNaN(getNumericPriceFromCard(card));
+            });
 
-            const cardsWithPrice = cards.filter(card => !Number.isNaN(getNumericPriceFromCard(card)));
-            if (!cardsWithPrice.length) {
+            if (!movedCardsWithPrice.length) return;
+
+            const lowestMovedCard = movedCardsWithPrice.reduce((lowest, card) => {
+                return getNumericPriceFromCard(card) < getNumericPriceFromCard(lowest)
+                    ? card
+                    : lowest;
+            });
+
+            const priceElement = elements[lowestMovedCard.id].price;
+
+            cursor.classList.add('off');
+            priceElement.classList.add('blinking-price');
+
+            await sleep(duration);
+
+            priceElement.classList.remove('blinking-price');
+        }
+
+        function updateCursorSoloEnMovidas(containerType, movedCards) {
+            const cursor = cursors[containerType];
+
+            getCardsByType(containerType).forEach(card => {
+                card.classList.remove('lowest');
+            });
+
+            const movedCardsWithPrice = movedCards.filter(card => {
+                return !Number.isNaN(getNumericPriceFromCard(card));
+            });
+
+            if (!movedCardsWithPrice.length) {
                 cursor.classList.add('off');
                 return;
             }
 
-            const lowestCard = cardsWithPrice.reduce((lowest, card) => (
-                getNumericPriceFromCard(card) < getNumericPriceFromCard(lowest) ? card : lowest
-            ));
+            const lowestMovedCard = movedCardsWithPrice.reduce((lowest, card) => {
+                return getNumericPriceFromCard(card) < getNumericPriceFromCard(lowest)
+                    ? card
+                    : lowest;
+            });
 
-            lowestCard.classList.add('lowest');
-            const priceElement = elements[lowestCard.id].price;
-            cursor.classList.remove('off');
+            lowestMovedCard.classList.add('lowest');
+
+            const priceElement = elements[lowestMovedCard.id].price;
             priceElement.appendChild(cursor);
+            cursor.classList.remove('off');
         }
 
         function captureCardPositions(cards) {
@@ -456,8 +492,9 @@
             return positions;
         }
 
-        async function animateCardReorder(containerType, container, nextOrder, firstPositions) {
-            const movedCards = [];
+        async function animateCardReorder(containerType, container, nextOrder, firstPositions, movedCards) {
+            await parpadearMenorEntreTarjetasMovidas(containerType, movedCards, 1000);
+
             nextOrder.forEach(card => container.appendChild(card));
 
             const lastPositions = captureCardPositions(nextOrder);
@@ -476,7 +513,6 @@
                 } else {
                     card.classList.add('moving-down');
                 }
-                movedCards.push(card);
 
                 card.style.transition = 'none';
                 card.style.transform = `translateY(${deltaY}px)`;
@@ -487,41 +523,75 @@
                 });
             });
 
-            setTimeout(() => {
-                nextOrder.forEach(card => card.classList.remove('moving-up', 'moving-down'));
-            }, 650);
+            await sleep(650);
+
+            movedCards.forEach(card => {
+                card.classList.remove('moving-up', 'moving-down');
+            });
 
             for (const card of movedCards) {
                 const key = card.id;
                 const price = preciosAnteriores[key];
-                if (price === null || Number.isNaN(price)) continue;
-                const formatted = `$${parseFloat(price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-                await escribirPrecioConCursor(key, formatted);
+
+                if (price === null || Number.isNaN(Number(price))) continue;
+
+                const formatted = `$${Number(price).toLocaleString('en-US', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                })}`;
+
+                await escribirPrecioConCursor(containerType, key, formatted);
             }
 
-            updateLowestCursor(containerType);
+            updateCursorSoloEnMovidas(containerType, movedCards);
         }
 
         // Ordenar cards por precio y animar sólo si cambia la posición
-        function reorderCards(containerType) {
+        async function reorderCards(containerType) {
+            if (reorderLocks[containerType]) return;
+
             const container = document.getElementById(`${containerType}Container`);
             const cards = Array.from(container.children);
-            const firstPositions = captureCardPositions(cards);
 
-            const sortedCards = [...cards].sort((a, b) => {
-                const priceA = parseFloat(elements[a.id].price.textContent.replace(/[$,]/g, '')) || 0;
-                const priceB = parseFloat(elements[b.id].price.textContent.replace(/[$,]/g, '')) || 0;
-                return priceB - priceA;
+            const cardsWithPrice = cards.filter(card => {
+                return !Number.isNaN(getNumericPriceFromCard(card));
             });
 
-            const orderChanged = cards.some((card, index) => card !== sortedCards[index]);
-
-            if (!orderChanged) {
-                updateLowestCursor(containerType);
+            if (!cardsWithPrice.length) {
                 return;
             }
 
-            animateCardReorder(containerType, container, sortedCards, firstPositions);
+            const firstPositions = captureCardPositions(cards);
+
+            const sortedCards = [...cards].sort((a, b) => {
+                const priceA = getNumericPriceFromCard(a);
+                const priceB = getNumericPriceFromCard(b);
+
+                if (Number.isNaN(priceA)) return 1;
+                if (Number.isNaN(priceB)) return -1;
+
+                return priceB - priceA;
+            });
+
+            const movedCards = getMovedCards(cards, sortedCards);
+
+            if (!movedCards.length) {
+                return;
+            }
+
+            reorderLocks[containerType] = true;
+
+            try {
+                await animateCardReorder(
+                    containerType,
+                    container,
+                    sortedCards,
+                    firstPositions,
+                    movedCards
+                );
+            } finally {
+                reorderLocks[containerType] = false;
+            }
         }
 
         // Fetch API data (todas las APIs de Binance + CoinGecko)
@@ -679,8 +749,8 @@
             initializeElements();
             fetchAPIData();
             initializeWebSockets();
-            updateLowestCursor('api');
-            updateLowestCursor('websocket');
+            updateCursorSoloEnMovidas('api', getCardsByType('api'));
+            updateCursorSoloEnMovidas('websocket', getCardsByType('websocket'));
             
             // Configurar intervalos
             setInterval(updateCountdown, 1000);
