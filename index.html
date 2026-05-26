@@ -425,7 +425,8 @@
         }
 
         function getNumericPriceFromCard(card) {
-            return parseFloat(elements[card.id].price.textContent.replace(/[$,]/g, ''));
+            const price = Number(preciosAnteriores[card.id]);
+            return Number.isFinite(price) ? price : NaN;
         }
 
         function getMovedCards(currentOrder, nextOrder) {
@@ -482,6 +483,31 @@
             lowestMovedCard.classList.add('lowest');
 
             const priceElement = elements[lowestMovedCard.id].price;
+            priceElement.appendChild(cursor);
+            cursor.classList.remove('off');
+        }
+
+        function updateCursorEnTarjetaInferior(containerType) {
+            const cursor = cursors[containerType];
+            const cards = getCardsByType(containerType);
+
+            cards.forEach(card => {
+                card.classList.remove('lowest');
+            });
+
+            const cardsWithPrice = cards.filter(card => {
+                return !Number.isNaN(getNumericPriceFromCard(card));
+            });
+
+            if (!cardsWithPrice.length) {
+                cursor.classList.add('off');
+                return;
+            }
+
+            const bottomCard = cardsWithPrice[cardsWithPrice.length - 1];
+            const priceElement = elements[bottomCard.id].price;
+
+            bottomCard.classList.add('lowest');
             priceElement.appendChild(cursor);
             cursor.classList.remove('off');
         }
@@ -558,6 +584,8 @@
             });
 
             if (!cardsWithPrice.length) {
+                const cursor = cursors[containerType];
+                cursor.classList.add('off');
                 return;
             }
 
@@ -576,6 +604,7 @@
             const movedCards = getMovedCards(cards, sortedCards);
 
             if (!movedCards.length) {
+                updateCursorEnTarjetaInferior(containerType);
                 return;
             }
 
@@ -749,8 +778,8 @@
             initializeElements();
             fetchAPIData();
             initializeWebSockets();
-            updateCursorSoloEnMovidas('api', getCardsByType('api'));
-            updateCursorSoloEnMovidas('websocket', getCardsByType('websocket'));
+            updateCursorEnTarjetaInferior('api');
+            updateCursorEnTarjetaInferior('websocket');
             
             // Configurar intervalos
             setInterval(updateCountdown, 1000);
