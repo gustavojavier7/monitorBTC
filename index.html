@@ -377,18 +377,30 @@
             }
         }
 
-        // Actualizar precio con animación de color + escritura CLI (25 cps)
+        async function escribirPrecioConCursor(key, text) {
+            const element = elements[key].price;
+            const token = ++typingTokens[key];
+            const cursor = createCursor();
+            cursor.classList.remove('off');
+            element.appendChild(cursor);
+            await escribirPrecioGradual(element, text, token, key);
+            if (typingTokens[key] !== token) return;
+            element.appendChild(cursor);
+        }
+
+        function escribirPrecioInstantaneo(key, text) {
+            typingTokens[key]++;
+            elements[key].price.textContent = text;
+        }
+
+        // Actualizar precio con animación de color
         async function actualizarPrecioConColor(key, price) {
             const element = elements[key].price;
             const previousPrice = preciosAnteriores[key];
             const formatted = `$${parseFloat(price).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
 
             preciosAnteriores[key] = price;
-            const token = ++typingTokens[key];
-            await escribirPrecioGradual(element, formatted, token, key);
-
-            if (typingTokens[key] !== token) return;
-
+            escribirPrecioInstantaneo(key, formatted);
             element.classList.remove('loading');
 
             if (previousPrice !== null && price !== previousPrice) {
@@ -444,7 +456,8 @@
             return positions;
         }
 
-        function animateCardReorder(container, nextOrder, firstPositions) {
+        async function animateCardReorder(containerType, container, nextOrder, firstPositions) {
+            const movedCards = [];
             nextOrder.forEach(card => container.appendChild(card));
 
             const lastPositions = captureCardPositions(nextOrder);
@@ -463,6 +476,7 @@
                 } else {
                     card.classList.add('moving-down');
                 }
+                movedCards.push(card);
 
                 card.style.transition = 'none';
                 card.style.transform = `translateY(${deltaY}px)`;
@@ -476,6 +490,16 @@
             setTimeout(() => {
                 nextOrder.forEach(card => card.classList.remove('moving-up', 'moving-down'));
             }, 650);
+
+            for (const card of movedCards) {
+                const key = card.id;
+                const price = preciosAnteriores[key];
+                if (price === null || Number.isNaN(price)) continue;
+                const formatted = `$${parseFloat(price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                await escribirPrecioConCursor(key, formatted);
+            }
+
+            updateLowestCursor(containerType);
         }
 
         // Ordenar cards por precio y animar sólo si cambia la posición
@@ -497,8 +521,7 @@
                 return;
             }
 
-            animateCardReorder(container, sortedCards, firstPositions);
-            updateLowestCursor(containerType);
+            animateCardReorder(containerType, container, sortedCards, firstPositions);
         }
 
         // Fetch API data (todas las APIs de Binance + CoinGecko)
