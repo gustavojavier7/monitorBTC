@@ -347,6 +347,8 @@
         const TYPE_DELAY = 1000 / CHARS_PER_SECOND;
         const CURSOR_BLINK_DURATION_SECONDS = 0.85;
         const reorderLocks = { api: false, websocket: false };
+        const debounceReorders = { api: null, websocket: null };
+        const DEBOUNCE_DELAY = 160;
 
         const cursors = {
             api: createCursor(),
@@ -370,6 +372,17 @@
 
         function sleep(ms) {
             return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        function debouncedReorder(containerType) {
+            if (debounceReorders[containerType]) {
+                clearTimeout(debounceReorders[containerType]);
+            }
+
+            debounceReorders[containerType] = setTimeout(() => {
+                reorderCards(containerType);
+                debounceReorders[containerType] = null;
+            }, DEBOUNCE_DELAY);
         }
 
         function initializeElements() {
@@ -788,7 +801,7 @@
                 elements.binanceSettlementAPI.price.textContent = 'Error';
             }
 
-            await reorderCards('api');
+            debouncedReorder('api');
         }
 
         // Setup WebSocket
@@ -809,7 +822,9 @@
                         const data = JSON.parse(event.data);
                         const price = processData(data);
                         if (price && !isNaN(price)) {
-                            actualizarPrecioConColor(key, price, false).then(() => reorderCards('websocket'));
+                            actualizarPrecioConColor(key, price, false).then(() => {
+                                debouncedReorder('websocket');
+                            });
                         }
                     } catch (error) {
                         console.error(`Error processing ${key} data:`, error);
