@@ -110,6 +110,10 @@
             transform: translateY(-2px);
         }
 
+        .is-reordering .price-card:hover {
+            transform: none;
+        }
+
         .price-card:last-child {
             margin-bottom: 0;
         }
@@ -191,6 +195,10 @@
             text-shadow: 0 0 10px rgba(239, 68, 68, 0.3);
         }
 
+        .blinking-price {
+            animation: blink-price 0.55s ease-in-out infinite;
+        }
+
         .loading {
             opacity: 0.5;
             animation: pulse 2s infinite;
@@ -205,6 +213,11 @@
             0% { opacity: 0.5; }
             50% { opacity: 0.8; }
             100% { opacity: 0.5; }
+        }
+
+        @keyframes blink-price {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.35; }
         }
 
         @media (max-width: 768px) {
@@ -321,6 +334,7 @@
         const CHARS_PER_SECOND = 25;
         const TYPE_DELAY = 1000 / CHARS_PER_SECOND;
         const reorderLocks = { api: false, websocket: false };
+        const colorResetTimers = {};
 
         const cursors = {
             api: createCursor(),
@@ -403,11 +417,23 @@
             escribirPrecioInstantaneo(key, formatted);
             element.classList.remove('loading');
 
+            if (colorResetTimers[key]) {
+                clearTimeout(colorResetTimers[key]);
+                colorResetTimers[key] = null;
+            }
+
             if (previousPrice !== null && price !== previousPrice) {
                 const direction = price > previousPrice ? 'up' : 'down';
                 const opposite = direction === 'up' ? 'down' : 'up';
                 element.classList.remove(opposite);
                 element.classList.add(direction);
+
+                colorResetTimers[key] = setTimeout(() => {
+                    element.classList.remove('up', 'down');
+                    colorResetTimers[key] = null;
+                }, 1100);
+            } else if (previousPrice !== null) {
+                element.classList.remove('up', 'down');
             }
         }
 
@@ -519,57 +545,62 @@
         }
 
         async function animateCardReorder(containerType, container, nextOrder, firstPositions, movedCards) {
-            await parpadearMenorEntreTarjetasMovidas(containerType, movedCards, 1000);
+            container.classList.add('is-reordering');
+            try {
+                await parpadearMenorEntreTarjetasMovidas(containerType, movedCards, 1000);
 
-            nextOrder.forEach(card => container.appendChild(card));
+                nextOrder.forEach(card => container.appendChild(card));
 
-            const lastPositions = captureCardPositions(nextOrder);
+                const lastPositions = captureCardPositions(nextOrder);
 
-            nextOrder.forEach(card => {
-                const first = firstPositions.get(card);
-                const last = lastPositions.get(card);
-                const deltaY = first.top - last.top;
+                nextOrder.forEach(card => {
+                    const first = firstPositions.get(card);
+                    const last = lastPositions.get(card);
+                    const deltaY = first.top - last.top;
 
-                card.classList.remove('moving-up', 'moving-down');
+                    card.classList.remove('moving-up', 'moving-down');
 
-                if (deltaY === 0) return;
+                    if (deltaY === 0) return;
 
-                if (deltaY > 0) {
-                    card.classList.add('moving-up');
-                } else {
-                    card.classList.add('moving-down');
+                    if (deltaY > 0) {
+                        card.classList.add('moving-up');
+                    } else {
+                        card.classList.add('moving-down');
+                    }
+
+                    card.style.transition = 'none';
+                    card.style.transform = `translateY(${deltaY}px)`;
+
+                    requestAnimationFrame(() => {
+                        card.style.transition = '';
+                        card.style.transform = 'translateY(0)';
+                    });
+                });
+
+                await sleep(650);
+
+                movedCards.forEach(card => {
+                    card.classList.remove('moving-up', 'moving-down');
+                });
+
+                for (const card of movedCards) {
+                    const key = card.id;
+                    const price = preciosAnteriores[key];
+
+                    if (price === null || Number.isNaN(Number(price))) continue;
+
+                    const formatted = `$${Number(price).toLocaleString('en-US', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
+                    })}`;
+
+                    await escribirPrecioConCursor(containerType, key, formatted);
                 }
 
-                card.style.transition = 'none';
-                card.style.transform = `translateY(${deltaY}px)`;
-
-                requestAnimationFrame(() => {
-                    card.style.transition = '';
-                    card.style.transform = 'translateY(0)';
-                });
-            });
-
-            await sleep(650);
-
-            movedCards.forEach(card => {
-                card.classList.remove('moving-up', 'moving-down');
-            });
-
-            for (const card of movedCards) {
-                const key = card.id;
-                const price = preciosAnteriores[key];
-
-                if (price === null || Number.isNaN(Number(price))) continue;
-
-                const formatted = `$${Number(price).toLocaleString('en-US', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2
-                })}`;
-
-                await escribirPrecioConCursor(containerType, key, formatted);
+                updateCursorSoloEnMovidas(containerType, movedCards);
+            } finally {
+                container.classList.remove('is-reordering');
             }
-
-            updateCursorSoloEnMovidas(containerType, movedCards);
         }
 
         // Ordenar cards por precio y animar sólo si cambia la posición
