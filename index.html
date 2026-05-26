@@ -128,19 +128,16 @@
             box-shadow: 0 0 26px rgba(250, 204, 21, 0.22);
         }
 
-        .cursor {
+        .cursor-target .price::after {
+            content: '';
             display: inline-block;
             width: 0.62em;
             height: 1.05em;
             margin-left: 4px;
-            transform: translateY(3px);
+            vertical-align: -3px;
             background: #7dffb3;
             box-shadow: 0 0 10px rgba(125, 255, 179, 0.8);
             animation: blink 0.85s steps(1) infinite;
-        }
-
-        .cursor.off {
-            display: none;
         }
 
         .card-header {
@@ -345,15 +342,9 @@
         const typingTokens = {};
         const CHARS_PER_SECOND = 25;
         const TYPE_DELAY = 1000 / CHARS_PER_SECOND;
-        const CURSOR_BLINK_DURATION_SECONDS = 0.85;
         const reorderLocks = { api: false, websocket: false };
         const debounceReorders = { api: null, websocket: null };
         const DEBOUNCE_DELAY = 160;
-
-        const cursors = {
-            api: createCursor(),
-            websocket: createCursor()
-        };
 
         // Configuración de elementos
         const config = {
@@ -362,14 +353,6 @@
         };
 
         // Inicializar elementos
-        function createCursor() {
-            const cursor = document.createElement('span');
-            cursor.className = 'cursor off';
-            const nowSeconds = Date.now() / 1000;
-            cursor.style.animationDelay = `-${(nowSeconds % CURSOR_BLINK_DURATION_SECONDS).toFixed(3)}s`;
-            return cursor;
-        }
-
         function sleep(ms) {
             return new Promise(resolve => setTimeout(resolve, ms));
         }
@@ -456,23 +439,15 @@
         async function escribirPrecioConCursor(containerType, key, price) {
             const element = elements[key].price;
             const token = ++typingTokens[key];
-            const cursor = cursors[containerType];
             const text = formatPrice(price);
 
             aplicarColorPrecio(key, price);
-
-            
-            cursor.classList.remove('off');
             element.textContent = '';
-            element.appendChild(cursor);
 
             for (const char of text) {
                 if (typingTokens[key] !== token) return;
 
-                cursor.remove();
                 element.textContent += char;
-                element.appendChild(cursor);
-
                 await sleep(TYPE_DELAY);
             }
 
@@ -480,27 +455,16 @@
 
             element.dataset.renderedPrice = String(price);
             element.classList.remove('loading');
-            cursor.classList.remove('off');
         }
 
         async function destellarYBorrarPrecio(containerType, card) {
             const key = card.id;
             const element = elements[key].price;
-            const cursor = cursors[containerType];
-
-            cursor.classList.remove('off');
-            element.appendChild(cursor);
 
             element.classList.add('blinking-price');
-
             await sleep(1000);
-
             element.classList.remove('blinking-price');
-
-            cursor.remove();
             element.textContent = '';
-            element.appendChild(cursor);
-            cursor.classList.remove('off');
         }
 
         // Actualizar estado de conexión
@@ -526,8 +490,6 @@
         }
 
         async function parpadearMenorEntreTarjetasMovidas(containerType, movedCards, duration = 1000) {
-            const cursor = cursors[containerType];
-
             const movedCardsWithPrice = movedCards.filter(card => {
                 return !Number.isNaN(getNumericPriceFromCard(card));
             });
@@ -542,7 +504,6 @@
 
             const priceElement = elements[lowestMovedCard.id].price;
 
-            cursor.classList.add('off');
             priceElement.classList.add('blinking-price');
 
             await sleep(duration);
@@ -551,8 +512,6 @@
         }
 
         function updateCursorSoloEnMovidas(containerType, movedCards) {
-            const cursor = cursors[containerType];
-
             getCardsByType(containerType).forEach(card => {
                 card.classList.remove('cursor-target');
             });
@@ -561,10 +520,7 @@
                 return !Number.isNaN(getNumericPriceFromCard(card));
             });
 
-            if (!movedCardsWithPrice.length) {
-                cursor.classList.add('off');
-                return;
-            }
+            if (!movedCardsWithPrice.length) return;
 
             const lowestMovedCard = movedCardsWithPrice.reduce((lowest, card) => {
                 return getNumericPriceFromCard(card) < getNumericPriceFromCard(lowest)
@@ -573,14 +529,9 @@
             });
 
             lowestMovedCard.classList.add('cursor-target');
-
-            const priceElement = elements[lowestMovedCard.id].price;
-            priceElement.appendChild(cursor);
-            cursor.classList.remove('off');
         }
 
         function updateCursorEnTarjetaInferior(containerType) {
-            const cursor = cursors[containerType];
             const cards = getCardsByType(containerType);
 
             cards.forEach(card => {
@@ -591,17 +542,9 @@
                 return !Number.isNaN(getNumericPriceFromCard(card));
             });
 
-            if (!cardsWithPrice.length) {
-                cursor.classList.add('off');
-                return;
-            }
+            if (!cardsWithPrice.length) return;
 
-            const bottomCard = cardsWithPrice[cardsWithPrice.length - 1];
-            const priceElement = elements[bottomCard.id].price;
-
-            bottomCard.classList.add('cursor-target');
-            priceElement.appendChild(cursor);
-            cursor.classList.remove('off');
+            cardsWithPrice[cardsWithPrice.length - 1].classList.add('cursor-target');
         }
 
         function captureCardPositions(cards) {
@@ -692,11 +635,7 @@
                 return !Number.isNaN(getNumericPriceFromCard(card));
             });
 
-            if (!cardsWithPrice.length) {
-                const cursor = cursors[containerType];
-                cursor.classList.add('off');
-                return;
-            }
+            if (!cardsWithPrice.length) return;
 
             const firstPositions = captureCardPositions(cards);
 
