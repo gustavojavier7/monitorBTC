@@ -379,8 +379,8 @@
                 clearTimeout(debounceReorders[containerType]);
             }
 
-            debounceReorders[containerType] = setTimeout(() => {
-                reorderCards(containerType);
+            debounceReorders[containerType] = setTimeout(async () => {
+                await reorderCards(containerType);
                 debounceReorders[containerType] = null;
             }, DEBOUNCE_DELAY);
         }
@@ -779,25 +779,15 @@
                 elements.binanceFuturesAPI.price.textContent = 'Error';
             }
 
-            // Binance Index API
+            // Binance Index + Settlement API (una sola llamada)
             try {
                 const response = await fetch('https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT');
                 const data = await response.json();
-                const price = parseFloat(data.markPrice);
-                await actualizarPrecioConColor('binanceIndexAPI', price, false);
+                await actualizarPrecioConColor('binanceIndexAPI', parseFloat(data.markPrice), false);
+                await actualizarPrecioConColor('binanceSettlementAPI', parseFloat(data.estimatedSettlePrice), false);
             } catch (error) {
-                console.error('Error fetching Binance Index API data:', error);
+                console.error('Error fetching Binance Index/Settlement:', error);
                 elements.binanceIndexAPI.price.textContent = 'Error';
-            }
-
-            // Binance Settlement API
-            try {
-                const response = await fetch('https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT');
-                const data = await response.json();
-                const price = parseFloat(data.estimatedSettlePrice);
-                await actualizarPrecioConColor('binanceSettlementAPI', price, false);
-            } catch (error) {
-                console.error('Error fetching Binance Settlement API data:', error);
                 elements.binanceSettlementAPI.price.textContent = 'Error';
             }
 
@@ -880,20 +870,25 @@
             });
             
             // Bitfinex WebSocket
-            let bitfinexChannelId = null;
-            const bitfinexWs = setupWebSocket('bitfinex', 'wss://api-pub.bitfinex.com/ws/2', {
+            setupWebSocket('bitfinex', 'wss://api-pub.bitfinex.com/ws/2', {
                 event: 'subscribe',
                 channel: 'ticker',
                 symbol: 'tBTCUSD'
-            }, data => {
-                if (data.event === 'subscribed' && data.channel === 'ticker') {
-                    bitfinexChannelId = data.chanId;
+            }, (() => {
+                let channelId = null;
+                return data => {
+                    if (data.event === 'subscribed' && data.channel === 'ticker') {
+                        channelId = data.chanId;
+                        return null;
+                    }
+
+                    if (Array.isArray(data) && data[0] === channelId && data[1] !== 'hb') {
+                        return data[1][6]; // Last price
+                    }
+
                     return null;
-                } else if (Array.isArray(data) && data[0] === bitfinexChannelId && data[1] !== 'hb') {
-                    return data[1][6]; // Last price
-                }
-                return null;
-            });
+                };
+            })());
         }
 
         // Inicialización
